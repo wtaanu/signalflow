@@ -21,9 +21,9 @@ async function getGoogleUser(accessToken: string) {
 async function upsertUser(googleUser: { id: string; email: string; name: string; picture: string }) {
   const sessionToken = crypto.randomBytes(32).toString("hex");
 
-  const existing = await db.select().from(usersTable).where(eq(usersTable.google_id, googleUser.id)).limit(1);
-
-  if (existing.length > 0) {
+  // 1. Try match by google_id
+  const byGoogleId = await db.select().from(usersTable).where(eq(usersTable.google_id, googleUser.id)).limit(1);
+  if (byGoogleId.length > 0) {
     const [updated] = await db.update(usersTable)
       .set({ name: googleUser.name, picture: googleUser.picture, session_token: sessionToken })
       .where(eq(usersTable.google_id, googleUser.id))
@@ -31,6 +31,17 @@ async function upsertUser(googleUser: { id: string; email: string; name: string;
     return { user: updated, sessionToken };
   }
 
+  // 2. Fall back to email match (e.g. user was pre-seeded by admin)
+  const byEmail = await db.select().from(usersTable).where(eq(usersTable.email, googleUser.email)).limit(1);
+  if (byEmail.length > 0) {
+    const [updated] = await db.update(usersTable)
+      .set({ google_id: googleUser.id, name: googleUser.name, picture: googleUser.picture, session_token: sessionToken })
+      .where(eq(usersTable.email, googleUser.email))
+      .returning();
+    return { user: updated, sessionToken };
+  }
+
+  // 3. New user — create with free plan
   const [created] = await db.insert(usersTable).values({
     google_id: googleUser.id,
     email: googleUser.email,
