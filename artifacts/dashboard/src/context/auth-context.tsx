@@ -56,9 +56,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSessionToken(urlSession);
       window.history.replaceState({}, "", window.location.pathname);
     } else if (urlError) {
-      // Auth failed — clear any stale session and redirect to login with the error
+      // Auth failed — stash error in sessionStorage so login page can show it
       localStorage.removeItem("sf_session");
-      window.history.replaceState({}, "", `/login?error=${encodeURIComponent(urlError)}`);
+      sessionStorage.setItem("sf_auth_error", urlError);
+      window.history.replaceState({}, "", window.location.pathname);
     }
   }, []);
 

@@ -14,11 +14,10 @@ export default function Login() {
   }, [user, loading, navigate]);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const err = params.get("error");
+    const err = sessionStorage.getItem("sf_auth_error");
     if (err) {
       setAuthError(err === "auth_failed" ? "Sign-in failed. Please try again." : err);
-      window.history.replaceState({}, "", "/login");
+      sessionStorage.removeItem("sf_auth_error");
     }
   }, []);
 
