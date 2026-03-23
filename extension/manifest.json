@@ -1,16 +1,19 @@
 {
   "manifest_version": 3,
   "name": "SignalFlow – Save LinkedIn Leads",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Capture LinkedIn profiles as leads and send them to your SignalFlow dashboard with one click.",
   "permissions": [
     "activeTab",
-    "storage"
+    "storage",
+    "identity"
   ],
   "host_permissions": [
     "https://www.linkedin.com/*",
     "https://*.replit.app/*",
-    "https://*.replit.dev/*"
+    "https://*.replit.dev/*",
+    "https://www.googleapis.com/*",
+    "https://accounts.google.com/*"
   ],
   "action": {
     "default_popup": "popup.html",
