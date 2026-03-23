@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { requireSession } from "../lib/auth";
 import { createOrder, verifySignature, PLANS } from "../lib/razorpay";
 import { logger } from "../lib/logger";
-import { sendUpgradeAlert } from "../lib/email";
+import { sendUpgradeAlert, sendSubscriptionConfirmation, sendCancellationConfirmation } from "../lib/email";
 
 const router = Router();
 
@@ -96,12 +96,21 @@ router.post("/plans/verify-payment", requireSession as any, async (req, res) => 
       .set({ razorpay_payment_id, razorpay_signature, status: "paid" })
       .where(eq(transactionsTable.razorpay_order_id, razorpay_order_id));
 
+    // Admin alert (goes to owner inbox only)
     sendUpgradeAlert({
       name: user.name,
       email: user.email,
       plan,
       amount: planConfig.amount,
       currency: planConfig.currency,
+    }).catch(() => {});
+
+    // User-facing confirmation (goes to the subscriber)
+    sendSubscriptionConfirmation({
+      name: user.name,
+      email: user.email,
+      plan,
+      expiresAt,
     }).catch(() => {});
 
     res.json({ success: true, plan, expires_at: expiresAt });
@@ -114,6 +123,10 @@ router.post("/plans/verify-payment", requireSession as any, async (req, res) => 
 router.post("/plans/cancel", requireSession as any, async (req, res) => {
   const user = (req as any).user;
   await db.update(usersTable).set({ plan: "free", plan_expires_at: null }).where(eq(usersTable.id, user.id));
+
+  // User-facing cancellation confirmation
+  sendCancellationConfirmation({ name: user.name, email: user.email }).catch(() => {});
+
   res.json({ success: true, message: "Subscription cancelled. You're now on the free plan." });
 });
 

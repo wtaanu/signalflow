@@ -65,6 +65,7 @@ function buildRawEmail(to: string, subject: string, htmlBody: string): string {
   return Buffer.from(raw).toString("base64url");
 }
 
+// Sends to the admin owner only (monitoring/alerts)
 async function sendEmail(subject: string, htmlBody: string): Promise<void> {
   try {
     const gmail = await getUncachableGmailClient();
@@ -72,9 +73,23 @@ async function sendEmail(subject: string, htmlBody: string): Promise<void> {
       userId: "me",
       requestBody: { raw: buildRawEmail(OWNER_EMAIL, subject, htmlBody) },
     });
-    logger.info({ subject }, "Email sent");
+    logger.info({ subject, to: OWNER_EMAIL }, "Admin email sent");
   } catch (err: any) {
     logger.error({ err: err?.message }, "Email send failed");
+  }
+}
+
+// Sends a transactional email directly to the user (plan events only)
+async function sendEmailToUser(to: string, subject: string, htmlBody: string): Promise<void> {
+  try {
+    const gmail = await getUncachableGmailClient();
+    await gmail.users.messages.send({
+      userId: "me",
+      requestBody: { raw: buildRawEmail(to, subject, htmlBody) },
+    });
+    logger.info({ subject, to }, "User email sent");
+  } catch (err: any) {
+    logger.error({ err: err?.message, to }, "User email send failed");
   }
 }
 
@@ -145,6 +160,52 @@ export async function sendLimitWarningAlert(user: {
         <tr><td style="padding:8px 0;color:#71717a">Usage</td><td style="padding:8px 0;color:#f59e0b;font-weight:600">${user.monthly_usage} / ${user.limit} leads</td></tr>
       </table>
       <p style="margin-top:16px;color:#a1a1aa;font-size:13px">This user may be ready to upgrade. Consider a follow-up.</p>
+    </div>`
+  );
+}
+
+// ── User-facing transactional emails (plan events only) ───────────────────────
+
+export async function sendSubscriptionConfirmation(user: {
+  name: string | null;
+  email: string;
+  plan: string;
+  expiresAt: Date;
+}) {
+  const planLabel = user.plan === "annual" ? "Elite Annual 👑" : "Pro Monthly ⚡";
+  const expiryStr = user.expiresAt.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", dateStyle: "long" });
+  await sendEmailToUser(
+    user.email,
+    `Welcome to SignalFlow ${planLabel}! Your plan is active`,
+    `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;background:#0f0f0f;color:#e4e4e7;padding:24px;border-radius:12px">
+      <h2 style="color:#22c55e;margin-bottom:4px">You're all set! 🎉</h2>
+      <p style="color:#a1a1aa;margin-top:0">Your <strong style="color:#e4e4e7">${planLabel}</strong> plan is now active.</p>
+      <table style="width:100%;border-collapse:collapse;margin-top:16px">
+        <tr><td style="padding:8px 0;color:#71717a">Plan</td><td style="padding:8px 0;color:#22c55e;font-weight:600">${planLabel}</td></tr>
+        <tr><td style="padding:8px 0;color:#71717a">Valid until</td><td style="padding:8px 0;color:#e4e4e7">${expiryStr}</td></tr>
+        <tr><td style="padding:8px 0;color:#71717a">Leads</td><td style="padding:8px 0;color:#e4e4e7">Unlimited</td></tr>
+      </table>
+      <p style="margin-top:20px;color:#a1a1aa;font-size:13px">You now have unlimited lead saves, AI-drafted messages, and full dashboard access. Start capturing leads with the Chrome Extension.</p>
+      <a href="https://signal-flow-dashboard.replit.app" style="display:inline-block;margin-top:20px;padding:10px 20px;background:#7c3aed;color:#fff;border-radius:8px;text-decoration:none;font-size:14px">Open Dashboard →</a>
+      <p style="margin-top:24px;font-size:11px;color:#52525b">If you didn't make this purchase, contact us immediately.</p>
+    </div>`
+  );
+}
+
+export async function sendCancellationConfirmation(user: {
+  name: string | null;
+  email: string;
+}) {
+  await sendEmailToUser(
+    user.email,
+    `SignalFlow: Your subscription has been cancelled`,
+    `<div style="font-family:sans-serif;max-width:480px;margin:0 auto;background:#0f0f0f;color:#e4e4e7;padding:24px;border-radius:12px">
+      <h2 style="color:#f59e0b;margin-bottom:4px">Subscription Cancelled</h2>
+      <p style="color:#a1a1aa;margin-top:0">Hi ${user.name ?? "there"}, your SignalFlow subscription has been cancelled.</p>
+      <p style="color:#a1a1aa;font-size:14px">You've been moved to the <strong style="color:#e4e4e7">Free plan</strong> (5 leads/month). Your existing saved leads remain accessible.</p>
+      <p style="color:#a1a1aa;font-size:14px">Want to resubscribe? You can upgrade again anytime from your dashboard.</p>
+      <a href="https://signal-flow-dashboard.replit.app" style="display:inline-block;margin-top:20px;padding:10px 20px;background:#7c3aed;color:#fff;border-radius:8px;text-decoration:none;font-size:14px">Go to Dashboard →</a>
+      <p style="margin-top:24px;font-size:11px;color:#52525b">If you didn't request this cancellation, contact us immediately.</p>
     </div>`
   );
 }
