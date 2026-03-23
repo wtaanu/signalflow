@@ -123,6 +123,7 @@ router.get("/auth/callback", async (req, res) => {
 
   try {
     const redirectUri = getRedirectUri(req);
+    logger.info({ redirectUri, code: code?.slice(0, 10) }, "OAuth callback: exchanging code");
 
     const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
@@ -136,16 +137,22 @@ router.get("/auth/callback", async (req, res) => {
       }),
     });
 
-    const tokenData = await tokenRes.json() as { access_token: string };
+    const tokenData = await tokenRes.json() as { access_token?: string; error?: string; error_description?: string };
+    if (!tokenData.access_token) {
+      logger.error({ googleError: tokenData.error, desc: tokenData.error_description }, "Google token exchange failed");
+      throw new Error(`Google token exchange failed: ${tokenData.error} — ${tokenData.error_description}`);
+    }
+
     const googleUser = await getGoogleUser(tokenData.access_token);
     const { sessionToken } = await upsertUser(googleUser);
 
-    const proto = (req.headers["x-forwarded-proto"] as string)?.split(",")[0]?.trim() ?? req.protocol;
-    const host  = (req.headers["x-forwarded-host"] as string)?.split(",")[0]?.trim() ?? req.headers["host"] ?? "localhost";
-    res.redirect(`${proto}://${host}/?session=${sessionToken}`);
+    // Always redirect back to the app root on the same domain as the redirect URI
+    const appBase = getRedirectUri(req).replace("/api/auth/callback", "");
+    res.redirect(`${appBase}/?session=${sessionToken}`);
   } catch (err: any) {
     logger.error({ err: err?.message }, "OAuth callback failed");
-    res.redirect("/?error=auth_failed");
+    const appBase = getRedirectUri(req).replace("/api/auth/callback", "");
+    res.redirect(`${appBase}/?error=auth_failed`);
   }
 });
 
