@@ -41,13 +41,25 @@ async function upsertUser(googleUser: { id: string; email: string; name: string;
     return { user: updated, sessionToken };
   }
 
-  // 3. New user — create with free plan
+  // 3. New user — check if email has a pre-assigned plan via SEED_USER_PLANS env var
+  // Format: "email1:plan1,email2:plan2" e.g. "wtaanu@gmail.com:annual"
+  const seedPlans: Record<string, string> = {};
+  (process.env.SEED_USER_PLANS || "").split(",").forEach(entry => {
+    const [seedEmail, seedPlan] = entry.split(":").map(s => s.trim());
+    if (seedEmail && seedPlan) seedPlans[seedEmail.toLowerCase()] = seedPlan;
+  });
+  const assignedPlan = seedPlans[googleUser.email.toLowerCase()] ?? "free";
+  const planExpiresAt = assignedPlan !== "free"
+    ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
+    : null;
+
   const [created] = await db.insert(usersTable).values({
     google_id: googleUser.id,
     email: googleUser.email,
     name: googleUser.name,
     picture: googleUser.picture,
-    plan: "free",
+    plan: assignedPlan,
+    plan_expires_at: planExpiresAt,
     monthly_usage: 0,
     session_token: sessionToken,
   }).returning();
@@ -75,7 +87,9 @@ router.post("/auth/google/token", async (req, res) => {
 });
 
 function getRedirectUri(req: import("express").Request): string {
-  // Use x-forwarded headers when behind the Replit proxy (dev + production)
+  // Prefer explicit env var (set this in production to your published domain)
+  if (process.env.GOOGLE_REDIRECT_URI) return process.env.GOOGLE_REDIRECT_URI;
+  // Otherwise derive from x-forwarded headers (works behind Replit proxy)
   const proto = (req.headers["x-forwarded-proto"] as string)?.split(",")[0]?.trim() ?? req.protocol;
   const host  = (req.headers["x-forwarded-host"] as string)?.split(",")[0]?.trim() ?? req.headers["host"] ?? "localhost";
   return `${proto}://${host}/api/auth/callback`;
