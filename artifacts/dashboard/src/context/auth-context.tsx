@@ -50,10 +50,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const urlSession = params.get("session");
+    const urlError = params.get("error");
     if (urlSession) {
       localStorage.setItem("sf_session", urlSession);
       setSessionToken(urlSession);
       window.history.replaceState({}, "", window.location.pathname);
+    } else if (urlError) {
+      // Auth failed — clear any stale session and redirect to login with the error
+      localStorage.removeItem("sf_session");
+      window.history.replaceState({}, "", `/login?error=${encodeURIComponent(urlError)}`);
     }
   }, []);
 
