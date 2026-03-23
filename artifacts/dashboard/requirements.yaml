@@ -1,0 +1,16 @@
+packages:
+  "framer-motion": "For premium page transitions and micro-interactions"
+  "date-fns": "For elegant date formatting"
+  "clsx": "For conditional class names"
+  "tailwind-merge": "For merging tailwind classes safely"
+  "lucide-react": "For beautiful consistent icons"
+
+images:
+  - path: "artifacts/dashboard/public/images/bg-glow.png"
+    description: "A very dark, premium abstract background with subtle deep purple and electric blue gradient meshes and a soft starlight glow. Extremely minimal, perfect for a high-end SaaS dark mode background."
+    aspect_ratio: "16:9"
+
+notes:
+  - App is forced into a premium dark mode aesthetic.
+  - Using generated API hooks from @workspace/api-client-react.
+  - Delete actions include optimistic UI updates or cache invalidation.

@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "DWIZqKHJWRDi0kcpd-usG"
+uri = "file://signalflow-extension.zip"
+type = "unspecified"
+title = "SignalFlow Extension (Floating Button)"
