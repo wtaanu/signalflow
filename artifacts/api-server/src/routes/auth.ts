@@ -63,13 +63,20 @@ router.post("/auth/google/token", async (req, res) => {
   }
 });
 
-router.get("/auth/google", (_req, res) => {
+function getRedirectUri(req: import("express").Request): string {
+  // Use x-forwarded headers when behind the Replit proxy (dev + production)
+  const proto = (req.headers["x-forwarded-proto"] as string)?.split(",")[0]?.trim() ?? req.protocol;
+  const host  = (req.headers["x-forwarded-host"] as string)?.split(",")[0]?.trim() ?? req.headers["host"] ?? "localhost";
+  return `${proto}://${host}/api/auth/callback`;
+}
+
+router.get("/auth/google", (req, res) => {
   if (!GOOGLE_CLIENT_ID) {
     res.status(503).json({ error: "Google OAuth not configured. Set GOOGLE_CLIENT_ID." });
     return;
   }
-  const domain = process.env.REPLIT_DOMAINS?.split(",")[0] ?? "localhost";
-  const redirectUri = `https://${domain}/api/auth/callback`;
+  const redirectUri = getRedirectUri(req);
+  logger.info({ redirectUri }, "OAuth redirect URI");
   const params = new URLSearchParams({
     client_id: GOOGLE_CLIENT_ID,
     redirect_uri: redirectUri,
@@ -90,8 +97,7 @@ router.get("/auth/callback", async (req, res) => {
   }
 
   try {
-    const domain = process.env.REPLIT_DOMAINS?.split(",")[0] ?? "localhost";
-    const redirectUri = `https://${domain}/api/auth/callback`;
+    const redirectUri = getRedirectUri(req);
 
     const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
@@ -109,8 +115,9 @@ router.get("/auth/callback", async (req, res) => {
     const googleUser = await getGoogleUser(tokenData.access_token);
     const { sessionToken } = await upsertUser(googleUser);
 
-    const dashDomain = process.env.REPLIT_DOMAINS?.split(",")[0] ?? "localhost";
-    res.redirect(`https://${dashDomain}/?session=${sessionToken}`);
+    const proto = (req.headers["x-forwarded-proto"] as string)?.split(",")[0]?.trim() ?? req.protocol;
+    const host  = (req.headers["x-forwarded-host"] as string)?.split(",")[0]?.trim() ?? req.headers["host"] ?? "localhost";
+    res.redirect(`${proto}://${host}/?session=${sessionToken}`);
   } catch (err: any) {
     logger.error({ err: err?.message }, "OAuth callback failed");
     res.redirect("/?error=auth_failed");
