@@ -4,6 +4,7 @@ import { db, usersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { getUserFromSession, requireSession } from "../lib/auth";
 import { logger } from "../lib/logger";
+import { sendSignInAlert } from "../lib/email";
 
 const router = Router();
 
@@ -25,9 +26,10 @@ async function upsertUser(googleUser: { id: string; email: string; name: string;
   const byGoogleId = await db.select().from(usersTable).where(eq(usersTable.google_id, googleUser.id)).limit(1);
   if (byGoogleId.length > 0) {
     const [updated] = await db.update(usersTable)
-      .set({ name: googleUser.name, picture: googleUser.picture, session_token: sessionToken })
+      .set({ name: googleUser.name, picture: googleUser.picture, session_token: sessionToken, last_login_at: new Date() })
       .where(eq(usersTable.google_id, googleUser.id))
       .returning();
+    sendSignInAlert(updated).catch(() => {});
     return { user: updated, sessionToken };
   }
 
@@ -35,9 +37,10 @@ async function upsertUser(googleUser: { id: string; email: string; name: string;
   const byEmail = await db.select().from(usersTable).where(eq(usersTable.email, googleUser.email)).limit(1);
   if (byEmail.length > 0) {
     const [updated] = await db.update(usersTable)
-      .set({ google_id: googleUser.id, name: googleUser.name, picture: googleUser.picture, session_token: sessionToken })
+      .set({ google_id: googleUser.id, name: googleUser.name, picture: googleUser.picture, session_token: sessionToken, last_login_at: new Date() })
       .where(eq(usersTable.email, googleUser.email))
       .returning();
+    sendSignInAlert(updated).catch(() => {});
     return { user: updated, sessionToken };
   }
 
@@ -62,8 +65,10 @@ async function upsertUser(googleUser: { id: string; email: string; name: string;
     plan_expires_at: planExpiresAt,
     monthly_usage: 0,
     session_token: sessionToken,
+    last_login_at: new Date(),
   }).returning();
 
+  sendSignInAlert(created).catch(() => {});
   return { user: created, sessionToken };
 }
 
